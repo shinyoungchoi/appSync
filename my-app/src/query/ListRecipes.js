@@ -3,11 +3,12 @@ import graphql from 'graphql-tag'
 
 export default graphql`
 query listRecipes{
-	listRecipes {
+  listRecipes{
     items {
-    name
-    id
-    ingradients
+      name
+      id
+      ingredients
+      directions
+    }
   }
-  }  
 }`

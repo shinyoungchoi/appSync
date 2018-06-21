@@ -3,7 +3,8 @@ import logo from './logo.svg';
 import './App.css';
 
 import { compose, graphql} from 'react-apollo'
-import ListRecipes from './query/ListRecipies'
+import ListRecipes from './query/ListRecipes'
+import NewRecipeSubscrition from './subscriptions/NewRecipeSubscriptions'
 import CreateRecipe from './mutations/CreateRecipe';
 import uuidV4 from 'uuid/v4'
 
@@ -15,8 +16,11 @@ class App extends Component {
     ingredient : '',
     direction : ''
   }
+  componentDidMount(){
+    this.props.subscriptToNewRecipes()
+  }
   onChange = ( key, value) => {
-    this.setState({[key]: value})
+    this.setState({[ key]: value })
   }
   addIngredient = () => {
     if(this.state.ingredient === '') return
@@ -104,28 +108,47 @@ const styles= {
 export default compose(
   graphql(ListRecipes,{
     options : {
-      fetchPolicy : 'catch-and-network'
+      fetchPolicy : 'cache-and-network'
     },
     props : props => ({
-      recipes : props.data.ListRecipes ? props.data.ListRecipes.items : []
+      recipes : props.data.listRecipes ? props.data.listRecipes.items : [],
+      subscriptToNewRecipes : params => {
+        props.data.subscribeToMore({
+          document : NewRecipeSubscrition,
+          updateQuery : (prev, { subscriptionData : { data : { onCreateRecipe}} }) => ({
+            ...prev,
+            listRecipes : {
+              __typename : 'RecipeConnection',
+              items : [ onCreateRecipe, ...prev.listRecipes.items.filter(recipe => recipe.id !== onCreateRecipe.id)]
+            }
+
+          })
+        })
+      }
     })
   }),
   graphql(CreateRecipe, {
     props: props => ({
-        onAdd : recipe => { 
-          props.mutate({
+        onAdd : recipe => props.mutate({
             variables : recipe,
             optimisticResponse : {
               __typename : "Mutation",
               createRecipe : { ...recipe, __typename : 'Recipe'}
             },
-            update : (proxy, {data: { createRecipe}}) => {
+            update : (proxy, {data: { createRecipe } }) => {
               const data = proxy.readQuery({query : ListRecipes})
-              data.ListRecipes.items.push(createRecipe)
+              let hasBeenAdded = false
+              data.listRecipes.items.map((item) => {
+                if(item.id === createRecipe.id){
+                  hasBeenAdded = true
+                }
+              })
+              if ( hasBeenAdded) return
+              data.listRecipes.items.push(createRecipe)
               proxy.writeQuery({query : ListRecipes, data})
             }
           })
-       }
+       
     })
   })
 )(App);
